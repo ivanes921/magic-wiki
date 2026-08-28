@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>Википедия</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="menu" id="menuBtn" aria-label="Меню">☰</button>
+    <a class="brand" href="/">Википедия</a>
+    <button class="search-icon" id="searchBtn" aria-label="Поиск">⌕</button>
+  </header>
+
+  <div class="search-panel" id="searchPanel" hidden>
+    <form id="searchForm">
+      <input id="searchInput" autocomplete="off" placeholder="Поиск в Википедии" aria-label="Поиск">
+      <button>Найти</button>
+    </form>
+    <div id="searchResults"></div>
+  </div>
+
+  <main class="page-shell">
+    <div class="wiki-layout">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-logo">Википедия</div>
+        <nav>
+          <a href="/?title=Заглавная страница">Заглавная страница</a>
+          <a href="/?title=Содержание">Содержание</a>
+          <a href="/?title=Избранные статьи">Избранные статьи</a>
+          <a href="/?title=Случайная статья">Случайная статья</a>
+        </nav>
+        <hr>
+        <div class="side-note">Материал из Википедии — свободной энциклопедии</div>
+      </aside>
+
+      <section class="article-column">
+        <div class="breadcrumbs" id="breadcrumbs">Википедия</div>
+        <article id="article" class="mw-body">
+          <div class="loading">Загрузка…</div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    Содержимое предоставлено Википедией. Используется через MediaWiki REST API.
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
