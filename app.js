@@ -18,13 +18,20 @@ function navigate(nextTitle) {
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
+// Convert a Wikipedia article URL into a title. We deliberately accept
+// absolute, protocol-relative and relative Wikipedia links because the HTML
+// returned by MediaWiki can contain all three forms.
 function getWikiTitleFromHref(href) {
   if (!href) return null;
   try {
-    const u = new URL(href, 'https://ru.wikipedia.org');
-    if (u.hostname !== 'ru.wikipedia.org') return null;
-    if (!u.pathname.startsWith('/wiki/')) return null;
-    const name = decodeURIComponent(u.pathname.slice('/wiki/'.length)).replace(/_/g, ' ');
+    const raw = href.trim();
+    if (!raw || raw.startsWith('#') || raw.startsWith('javascript:')) return null;
+    const u = new URL(raw, 'https://ru.wikipedia.org');
+    const isWikiHost = u.hostname === 'ru.wikipedia.org' || u.hostname.endsWith('.wikipedia.org');
+    if (!isWikiHost || !u.pathname.startsWith('/wiki/')) return null;
+    const rawName = u.pathname.slice('/wiki/'.length);
+    if (!rawName) return null;
+    const name = decodeURIComponent(rawName).replace(/_/g, ' ');
     if (!name || name.includes(':')) return null;
     return name;
   } catch {
@@ -37,11 +44,7 @@ function rewriteLinks(root) {
     const name = getWikiTitleFromHref(a.getAttribute('href'));
     if (!name) return;
     a.setAttribute('href', '/?title=' + encodeURIComponent(name));
-    a.onclick = e => {
-      e.preventDefault();
-      navigate(name);
-      return false;
-    };
+    a.dataset.wikiTitle = name;
   });
 }
 
@@ -81,6 +84,18 @@ function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 }
 
+// Event delegation is used instead of individual listeners. This guarantees
+// that dynamically inserted article links can never escape to real Wikipedia.
+article.addEventListener('click', e => {
+  const link = e.target.closest('a[href]');
+  if (!link || !article.contains(link)) return;
+  const name = link.dataset.wikiTitle || getWikiTitleFromHref(link.getAttribute('href'));
+  if (!name) return;
+  e.preventDefault();
+  e.stopPropagation();
+  navigate(name);
+});
+
 searchBtn.addEventListener('click', () => {
   searchPanel.hidden = !searchPanel.hidden;
   if (!searchPanel.hidden) searchInput.focus();
@@ -100,8 +115,6 @@ searchForm.addEventListener('submit', async e => {
   if (!q) return;
   searchResults.innerHTML = '<div class="searching">Поиск…</div>';
   try {
-    // Search directly through Wikimedia's public Action API.
-    // This avoids an unnecessary serverless hop and works reliably in mobile browsers.
     const url = 'https://ru.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
       encodeURIComponent(q) + '&srnamespace=0&srlimit=10&format=json&origin=*';
     const res = await fetch(url, {cache:'no-store'});
@@ -119,11 +132,14 @@ searchForm.addEventListener('submit', async e => {
         <p>${escapeHtml(String(p.snippet || '').replace(/<[^>]*>/g, ''))}</p>
       </div>
     `).join('');
+
     searchResults.querySelectorAll('[data-title]').forEach(a => {
       a.addEventListener('click', e => {
         e.preventDefault();
+        e.stopPropagation();
         const t = a.dataset.title;
         searchPanel.hidden = true;
+        searchInput.value = '';
         navigate(t);
       });
     });
