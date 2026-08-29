@@ -18,20 +18,30 @@ function navigate(nextTitle) {
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
+function getWikiTitleFromHref(href) {
+  if (!href) return null;
+  try {
+    const u = new URL(href, 'https://ru.wikipedia.org');
+    if (u.hostname !== 'ru.wikipedia.org') return null;
+    if (!u.pathname.startsWith('/wiki/')) return null;
+    const name = decodeURIComponent(u.pathname.slice('/wiki/'.length)).replace(/_/g, ' ');
+    if (!name || name.includes(':')) return null;
+    return name;
+  } catch {
+    return null;
+  }
+}
+
 function rewriteLinks(root) {
   root.querySelectorAll('a[href]').forEach(a => {
-    const href = a.getAttribute('href');
-    if (!href) return;
-    try {
-      const u = new URL(href, 'https://ru.wikipedia.org');
-      if (u.hostname === 'ru.wikipedia.org' && u.pathname.startsWith('/wiki/')) {
-        const name = decodeURIComponent(u.pathname.slice('/wiki/'.length)).replace(/_/g, ' ');
-        if (name && !name.includes(':')) {
-          a.href = '/?title=' + encodeURIComponent(name);
-          a.addEventListener('click', e => { e.preventDefault(); navigate(name); });
-        }
-      }
-    } catch {}
+    const name = getWikiTitleFromHref(a.getAttribute('href'));
+    if (!name) return;
+    a.setAttribute('href', '/?title=' + encodeURIComponent(name));
+    a.onclick = e => {
+      e.preventDefault();
+      navigate(name);
+      return false;
+    };
   });
 }
 
@@ -90,18 +100,23 @@ searchForm.addEventListener('submit', async e => {
   if (!q) return;
   searchResults.innerHTML = '<div class="searching">Поиск…</div>';
   try {
-    const res = await fetch('/api/search?q=' + encodeURIComponent(q), {cache:'no-store'});
+    // Search directly through Wikimedia's public Action API.
+    // This avoids an unnecessary serverless hop and works reliably in mobile browsers.
+    const url = 'https://ru.wikipedia.org/w/api.php?action=query&list=search&srsearch=' +
+      encodeURIComponent(q) + '&srnamespace=0&srlimit=10&format=json&origin=*';
+    const res = await fetch(url, {cache:'no-store'});
+    if (!res.ok) throw new Error('Поиск Википедии временно недоступен');
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Ошибка поиска');
-    if (!data.pages.length) {
+    const pages = Array.isArray(data?.query?.search) ? data.query.search : [];
+    if (!pages.length) {
       searchResults.innerHTML = '<div class="searching">Ничего не найдено.</div>';
       return;
     }
-    searchResults.innerHTML = data.pages.map(p => `
+    searchResults.innerHTML = pages.map(p => `
       <div class="result">
         <a href="/?title=${encodeURIComponent(p.title)}" data-title="${escapeHtml(p.title)}" class="result-title">${escapeHtml(p.title)}</a>
-        <div class="result-path">${escapeHtml(p.description || 'Статья Википедии')}</div>
-        <p>${escapeHtml(p.excerpt || '')}</p>
+        <div class="result-path">Статья Википедии</div>
+        <p>${escapeHtml(String(p.snippet || '').replace(/<[^>]*>/g, ''))}</p>
       </div>
     `).join('');
     searchResults.querySelectorAll('[data-title]').forEach(a => {
@@ -113,7 +128,7 @@ searchForm.addEventListener('submit', async e => {
       });
     });
   } catch (err) {
-    searchResults.innerHTML = '<div class="error">' + escapeHtml(err.message) + '</div>';
+    searchResults.innerHTML = '<div class="error">' + escapeHtml(err.message || 'Load failed') + '</div>';
   }
 });
 
